@@ -8,15 +8,15 @@ using System.Windows.Forms;
 
 namespace DoAnLTTQ.Tools
 {
-    class PenTools
+    class Eraser
     {
         Point oldPoint;
         Point currentPoint;
         Pen pen;
         Color color;
-        public PenTools()
+        public Eraser()
         {
-            color = Color.Black;
+            color = Color.FromArgb(255, 253, 254, 255);
             pen = new Pen(color, 1);
             pen.SetLineCap(System.Drawing.Drawing2D.LineCap.Round, System.Drawing.Drawing2D.LineCap.Round, System.Drawing.Drawing2D.DashCap.Round);
         }
@@ -28,6 +28,7 @@ namespace DoAnLTTQ.Tools
 
         public void Draw(Graphics g, MouseEventArgs e)
         {
+            g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
             currentPoint = e.Location;
             g.DrawLine(pen, oldPoint, currentPoint);
             oldPoint = currentPoint;
@@ -40,14 +41,5 @@ namespace DoAnLTTQ.Tools
                 pen.Width = value / 2;
             }
         }
-
-        public Color Color
-        {
-            set
-            {
-                pen.Color = value;
-            }
-        }
-
     }
 }

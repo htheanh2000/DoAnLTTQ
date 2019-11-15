@@ -16,13 +16,18 @@ namespace DoAnLTTQ
         private Bitmap final;
         private Bitmap back;
         private Bitmap front;
+        private Graphics gFinal;
+        private Graphics gBack;
+        private Graphics gFront;
         private int current;
         private Size layerSize;
+        private Stack<KeyValuePair<int, LayerRow>> deletedRows;
 
         public LayerContainer()
         {
             InitializeComponent();
             layers = new List<LayerRow>();
+            deletedRows = new Stack<KeyValuePair<int, LayerRow>>();
         }
 
         public int Count
@@ -78,81 +83,102 @@ namespace DoAnLTTQ
             }
         }
 
-        public void ProcessUpdate(Bitmap processing)
+        public void ProcessUpdate(Bitmap processing, bool preview = false)
         {
             if (processing != null)
             {
+                if (!preview) layers[current].Layer.Stacking();
                 using (Graphics g = Graphics.FromImage(layers[current].Layer.Image))
+                {
                     g.DrawImageUnscaled(processing, 0, 0, layerSize.Width, layerSize.Height);
-                processing.Dispose();
+                }
+
+                layers[current].Layer.Image.MakeTransparent(Color.FromArgb(255, 253, 254, 255));
             }
         }
 
         public void BackUpdate()
         {
-            using (Graphics g = Graphics.FromImage(back))
+            gBack.Clear(Color.Transparent);
+            for (int i = 0; i <= current; i++)
             {
-                g.Clear(Color.Transparent);
-                for (int i = 0; i <= current; i++)
+                if (layers[i].Layer.Visible)
                 {
-                    if (layers[i].Layer.Visible)
-                    {
-                        g.DrawImageUnscaled(layers[i].Layer.ImageWithOpacity, 0, 0, layerSize.Width, layerSize.Height);
-                    }
+                    gBack.DrawImageUnscaled(layers[i].Layer.ImageWithOpacity, 0, 0, layerSize.Width, layerSize.Height);
                 }
             }
         }
 
         public void FrontUpdate()
         {
-            using (Graphics g = Graphics.FromImage(front))
+            gFront.Clear(Color.Transparent);
+            for (int i = current + 1; i < layers.Count; i++)
             {
-                g.Clear(Color.Transparent);
-                for (int i = current + 1; i < layers.Count; i++)
+                if (layers[i].Layer.Visible)
                 {
-                    if (layers[i].Layer.Visible)
-                    {
-                        g.DrawImageUnscaled(layers[i].Layer.ImageWithOpacity, 0, 0, layerSize.Width, layerSize.Height);
-                    }
+                    gFront.DrawImageUnscaled(layers[i].Layer.ImageWithOpacity, 0, 0, layerSize.Width, layerSize.Height);
                 }
             }
         }
 
         public void FinalUpdate()
         {
-            using (Graphics g = Graphics.FromImage(final))
-            {
-                g.Clear(Color.Transparent);
-                g.DrawImageUnscaled(back, 0, 0, layerSize.Width, layerSize.Height);
-                g.DrawImageUnscaled(front, 0, 0, layerSize.Width, layerSize.Height);
-            }
+            gFinal.Clear(Color.Transparent);
+            gFinal.DrawImageUnscaled(back, 0, 0, layerSize.Width, layerSize.Height);
+            gFinal.DrawImageUnscaled(front, 0, 0, layerSize.Width, layerSize.Height);
         }
 
         public void AddLayerRow(ref Layer layer)
         {
             if (layers.Count == 0)
             {
+                current = -1;
                 layerSize = layer.Image.Size;
                 final = new Bitmap(layerSize.Width, layerSize.Height);
+                gFinal = Graphics.FromImage(final);
                 back = new Bitmap(layerSize.Width, layerSize.Height);
+                gBack = Graphics.FromImage(back);
                 front = new Bitmap(layerSize.Width, layerSize.Height);
+                gFront = Graphics.FromImage(front);
+
             }
 
-            LayerRow row = new LayerRow();
+            LayerRow row = new LayerRow(layer.Visible);
             row.Layer = layer;
             row.Text = layer.Name;
-            layers.Add(row);
-            current = layers.Count - 1;
+            current++;
+            layers.Insert(current, row);
             panel.Controls.Add(row);
+            Allocation();
+        }
+
+        public void RestoreRow()
+        {
+            LayerRow l = layers[current];
+            layers.Insert(deletedRows.Peek().Key, deletedRows.Peek().Value);
+            panel.Controls.Add(deletedRows.Peek().Value);
+            current = layers.IndexOf(l);
+            deletedRows.Pop();
             Allocation();
         }
 
         public void RemoveLayerRow()
         {
-            layers[current].Dispose();
+            deletedRows.Push(new KeyValuePair<int, LayerRow>(current, layers[current]));
             panel.Controls.Remove(layers[current]);
             layers.Remove(layers[current]);
             if (current != 0)
+                current--;
+            Allocation();
+        }
+
+        public void DeleteRowAt(LayerRow lr)
+        {
+            int index = layers.IndexOf(lr);
+            layers[index].Dispose();
+            panel.Controls.Remove(layers[index]);
+            layers.Remove(layers[index]);
+            if (index <= current && current > 0)
                 current--;
             Allocation();
         }
@@ -191,6 +217,14 @@ namespace DoAnLTTQ
             Allocation();
         }
 
+        public void MoveBack(LayerRow lr,bool up)
+        {
+            int index = layers.IndexOf(lr);
+            if (up) SwapRow(layers, index, index + 1);
+            else SwapRow(layers, index, index - 1);
+            Allocation();
+        }
+
         private void SwapRow(List<LayerRow> list, int row1, int row2)
         {
             LayerRow tmp = list[row1];
@@ -200,7 +234,8 @@ namespace DoAnLTTQ
 
         public void Merge()
         {
-            using(Graphics g = Graphics.FromImage(layers[current -1].Layer.Image))
+            layers[current - 1].Layer.Stacking();
+            using (Graphics g = Graphics.FromImage(layers[current -1].Layer.Image))
             {
                 g.DrawImage(layers[current].Layer.Image, 0, 0, layerSize.Width, layerSize.Height);
             }
@@ -210,7 +245,7 @@ namespace DoAnLTTQ
         public void Duplicate()
         {
             LayerRow newRow = new LayerRow();
-            newRow.Text = layers[current].Text + "-Copy";
+            newRow.Text = layers[current].Text + "(Copy)";
             newRow.Layer = new Layer(layers[current].Layer.Image, newRow.Text, true);
             current++;
             layers.Insert(current, newRow);
